@@ -88,10 +88,11 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '30/minute',
-        'user': '60/minute',
+        'anon': '100/hour',
+        'user': '1000/hour',
         'auth': '10/minute',
     },
+    'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
 }
 
 from datetime import timedelta
