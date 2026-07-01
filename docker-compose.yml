@@ -1,0 +1,44 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - sqlite_data:/app/data
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-replace-in-production}
+      - DEBUG=${DEBUG:-True}
+      - ACCOUNT_LOCKOUT_ATTEMPTS=${ACCOUNT_LOCKOUT_ATTEMPTS:-5}
+      - ACCOUNT_LOCKOUT_MINUTES=${ACCOUNT_LOCKOUT_MINUTES:-15}
+      - SESSION_TIMEOUT_MINUTES=${SESSION_TIMEOUT_MINUTES:-30}
+      - TOTP_ISSUER_NAME=${TOTP_ISSUER_NAME:-CLILoginSystem}
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  sqlite_data:
