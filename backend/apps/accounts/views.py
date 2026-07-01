@@ -9,6 +9,7 @@ import pyotp
 
 from .serializers import RegisterSerializer, UserDetailSerializer
 from .models import User, FailedLoginAttempt
+from .throttles import AuthRateThrottle
 from apps.sessions_app.models import UserSession
 
 
@@ -21,6 +22,7 @@ def get_client_ip(request):
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [AuthRateThrottle]
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -38,6 +40,7 @@ class RegisterView(APIView):
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [AuthRateThrottle]
 
     def post(self, request):
         username = request.data.get('username', '').lower().strip()
