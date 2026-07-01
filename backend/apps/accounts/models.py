@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone
+from django.conf import settings
 
 
 class UserManager(BaseUserManager):
@@ -61,3 +62,46 @@ class User(AbstractBaseUser, PermissionsMixin):
     def record_login(self):
         self.last_login = timezone.now()
         self.save(update_fields=['last_login'])
+
+
+class FailedLoginAttempt(models.Model):
+    username = models.CharField(max_length=150, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    attempted_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'failed_login_attempts'
+        ordering = ['-attempted_at']
+
+    @classmethod
+    def record(cls, username, ip_address=None):
+        cls.objects.create(username=username.lower(), ip_address=ip_address)
+
+    @classmethod
+    def is_locked(cls, username):
+        lockout_minutes = settings.ACCOUNT_LOCKOUT_MINUTES
+        max_attempts = settings.ACCOUNT_LOCKOUT_ATTEMPTS
+        since = timezone.now() - timezone.timedelta(minutes=lockout_minutes)
+        count = cls.objects.filter(
+            username=username.lower(),
+            attempted_at__gte=since
+        ).count()
+        return count >= max_attempts
+
+    @classmethod
+    def lockout_remaining_seconds(cls, username):
+        lockout_minutes = settings.ACCOUNT_LOCKOUT_MINUTES
+        since = timezone.now() - timezone.timedelta(minutes=lockout_minutes)
+        oldest = cls.objects.filter(
+            username=username.lower(),
+            attempted_at__gte=since
+        ).order_by('attempted_at').first()
+        if not oldest:
+            return 0
+        unlock_at = oldest.attempted_at + timezone.timedelta(minutes=lockout_minutes)
+        remaining = (unlock_at - timezone.now()).total_seconds()
+        return max(0, int(remaining))
+
+    @classmethod
+    def clear(cls, username):
+        cls.objects.filter(username=username.lower()).delete()
