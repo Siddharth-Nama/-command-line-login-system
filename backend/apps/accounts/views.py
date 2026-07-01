@@ -154,3 +154,64 @@ class TOTPEnableView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class TOTPVerifyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        code = request.data.get('code', '').strip()
+
+        if not code:
+            return Response({'error': 'TOTP code is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not user.totp_secret:
+            return Response(
+                {'error': 'Enable 2FA first before verifying.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if user.totp_confirmed:
+            return Response({'error': '2FA is already confirmed.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        totp = pyotp.TOTP(user.totp_secret)
+        if not totp.verify(code, valid_window=1):
+            return Response({'error': 'Invalid code. Try again.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.confirm_totp()
+        return Response(
+            {'message': '2FA enabled successfully. Future logins will require a TOTP code.'},
+            status=status.HTTP_200_OK,
+        )
+
+
+class TOTPDisableView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        code = request.data.get('code', '').strip()
+        password = request.data.get('password', '')
+
+        if not user.totp_enabled:
+            return Response({'error': '2FA is not enabled.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not password:
+            return Response({'error': 'Password is required to disable 2FA.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not user.check_password(password):
+            return Response({'error': 'Incorrect password.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if user.totp_confirmed:
+            if not code:
+                return Response({'error': 'Current TOTP code required.'}, status=status.HTTP_400_BAD_REQUEST)
+            totp = pyotp.TOTP(user.totp_secret)
+            if not totp.verify(code, valid_window=1):
+                return Response({'error': 'Invalid TOTP code.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user.disable_totp()
+        return Response(
+            {'message': '2FA has been disabled.'},
+            status=status.HTTP_200_OK,
+        )

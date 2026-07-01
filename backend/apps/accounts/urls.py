@@ -1,8 +1,10 @@
 from django.urls import path
-from .views import RegisterView, LoginView, TOTPEnableView
+from .views import RegisterView, LoginView, TOTPEnableView, TOTPVerifyView, TOTPDisableView
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
     path('2fa/enable/', TOTPEnableView.as_view(), name='totp-enable'),
+    path('2fa/verify/', TOTPVerifyView.as_view(), name='totp-verify'),
+    path('2fa/disable/', TOTPDisableView.as_view(), name='totp-disable'),
 ]
