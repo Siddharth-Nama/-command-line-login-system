@@ -6,6 +6,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.utils import timezone
 import pyotp
+import qrcode
+import io
+import base64
 
 from .serializers import RegisterSerializer, UserDetailSerializer
 from .models import User, FailedLoginAttempt
@@ -18,6 +21,13 @@ def get_client_ip(request):
     if x_forwarded_for:
         return x_forwarded_for.split(',')[0].strip()
     return request.META.get('REMOTE_ADDR')
+
+
+def generate_qr_base64(totp_uri):
+    img = qrcode.make(totp_uri)
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG')
+    return base64.b64encode(buffer.getvalue()).decode('utf-8')
 
 
 class RegisterView(APIView):
@@ -113,6 +123,34 @@ class LoginView(APIView):
                 'refresh': str(refresh),
                 'user': UserDetailSerializer(user).data,
                 'session_expires_at': session.expires_at.isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class TOTPEnableView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if user.totp_enabled and user.totp_confirmed:
+            return Response(
+                {'error': '2FA is already enabled. Disable it first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        secret = pyotp.random_base32()
+        user.enable_totp(secret)
+
+        from django.conf import settings
+        totp = pyotp.TOTP(secret)
+        uri = totp.provisioning_uri(name=user.username, issuer_name=settings.TOTP_ISSUER_NAME)
+        qr_base64 = generate_qr_base64(uri)
+
+        return Response(
+            {
+                'secret': secret,
+                'qr_code': f'data:image/png;base64,{qr_base64}',
+                'message': 'Scan the QR code with Google Authenticator then call verify-2fa to confirm.',
             },
             status=status.HTTP_200_OK,
         )
