@@ -215,3 +215,25 @@ class TOTPDisableView(APIView):
             {'message': '2FA has been disabled.'},
             status=status.HTTP_200_OK,
         )
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        refresh_token = request.data.get('refresh')
+        if not refresh_token:
+            return Response({'error': 'Refresh token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            token = RefreshToken(refresh_token)
+            jti = str(token['jti'])
+            session = UserSession.get_active(jti)
+            if session:
+                session.terminate()
+            token.blacklist()
+        except Exception:
+            return Response({'error': 'Invalid or expired token.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({'message': 'Logged out successfully.'}, status=status.HTTP_200_OK)
+
