@@ -17,9 +17,7 @@ def user(db):
 
 @pytest.fixture
 def auth_client(client, user):
-    login_url = reverse('login')
-    resp = client.post(login_url, {'username': 'totpuser', 'password': 'SecurePass1!'}, format='json')
-    client.credentials(HTTP_AUTHORIZATION=f"Bearer {resp.data['access']}")
+    client.force_authenticate(user=user)
     return client
 
 
