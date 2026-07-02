@@ -21,16 +21,26 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config
 
-    if (error.response?.status === 401 && !original._retry) {
+    if (error.response?.status === 401 && original && !original._retry) {
       original._retry = true
       const refresh = localStorage.getItem('refresh_token')
       if (refresh) {
         try {
           const res = await axios.post(`${BASE_URL}/api/auth/token/refresh/`, { refresh })
           const newAccess = res.data.access
-          localStorage.setItem('access_token', newAccess)
-          original.headers['Authorization'] = `Bearer ${newAccess}`
-          return api(original)
+          if (newAccess) {
+            localStorage.setItem('access_token', newAccess)
+            api.defaults.headers.common['Authorization'] = `Bearer ${newAccess}`
+            const retryConfig = {
+              ...original,
+              headers: {
+                ...original.headers,
+                Authorization: `Bearer ${newAccess}`,
+                'Content-Type': 'application/json',
+              },
+            }
+            return axios(retryConfig)
+          }
         } catch {
           localStorage.clear()
           window.dispatchEvent(new CustomEvent('auth:expired'))
